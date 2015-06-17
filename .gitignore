@@ -31,6 +31,12 @@ Makefile
 *.la
 *.lo
 
+# Kernel stuff
+/Module.symvers
+/modules.order
+.*.*.cmd
+/.tmp_versions
+
 # Shared objects (inc. Windows DLLs)
 *.so
 *.so.*
