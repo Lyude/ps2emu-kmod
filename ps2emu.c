@@ -118,6 +118,12 @@ static int ps2emu_device_write(struct serio *id, unsigned char val)
 
 static int ps2emu_char_release(struct inode *inode, struct file *file)
 {
+	struct ps2emu_device *ps2emu = file->private_data;
+
+	serio_unregister_port(&ps2emu->serio);
+
+	kfree(ps2emu);
+
 	return 0;
 }
 
