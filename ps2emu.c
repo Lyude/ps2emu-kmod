@@ -1,7 +1,7 @@
 /*
  * ps2emu kernel PS/2 device emulation module
  * Copyright (C) 2015 Red Hat
- * Copyright (C) 2015 Lyude (Stephen Chandler Paul) <cpaul@redhat.com>
+ * Copyright (C) 2015 Lyude (Stephen Chandler Paul) <thatslyude@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
@@ -29,7 +29,7 @@
 #define PS2EMU_MINOR 240
 #define PS2EMU_BUFSIZE 32
 
-MODULE_AUTHOR("Lyude <cpaul@redhat.com>");
+MODULE_AUTHOR("Lyude <thatslyude@gmail.com>");
 MODULE_DESCRIPTION("ps2emu test");
 MODULE_LICENSE("GPL");
 
