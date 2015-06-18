@@ -102,8 +102,6 @@ static int ps2emu_device_write(struct serio *id, unsigned char val)
 
 	mutex_lock(&ps2emu->devlock);
 
-	printk("ps2emu: From driver: %x\n", val);
-
 	newhead = ps2emu->head + 1;
 	if (newhead < PS2EMU_BUFSIZE) {
 		ps2emu->buf[ps2emu->head] = val;
@@ -111,7 +109,7 @@ static int ps2emu_device_write(struct serio *id, unsigned char val)
 
 		wake_up_interruptible(&ps2emu->waitq);
 	} else
-		printk(KERN_WARNING "Output buffer is full\n");
+		printk(KERN_WARNING "ps2emu: Output buffer is full\n");
 
 	mutex_unlock(&ps2emu->devlock);
 
@@ -181,11 +179,8 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 	if (ret)
 		goto out;
 
-	for (i = 0; i < count; i++) {
-		printk("ps2emu: Beginning send, count is %ld\n", count);
-		printk("ps2emu: To driver: %x\n", interrupt_data[i]);
+	for (i = 0; i < count; i++)
 		serio_interrupt(&ps2emu->serio, interrupt_data[i], 0);
-	}
 
 	mutex_unlock(&ps2emu->devlock);
 	ret = count;
