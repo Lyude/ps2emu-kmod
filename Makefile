@@ -8,3 +8,6 @@ all:
 
 clean:
 	make -C $(KDIR) M=$(PWD) clean
+
+modules_install:
+	make -C $(KDIR) M=$(PWD) modules_install
