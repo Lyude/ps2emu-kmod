@@ -33,15 +33,8 @@ MODULE_AUTHOR("Lyude <thatslyude@gmail.com>");
 MODULE_DESCRIPTION("ps2emu test");
 MODULE_LICENSE("GPL");
 
-static int ps2emu_char_open(struct inode *inode, struct file *file);
-static int ps2emu_char_release(struct inode *inode, struct file *file);
-static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
-				size_t count, loff_t *ppos);
-static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
-				 size_t count, loff_t *ppos);
-static unsigned int ps2emu_char_poll(struct file *file, poll_table *wait);
-
-static int ps2emu_device_write(struct serio *id, unsigned char val);
+static const struct file_operations ps2emu_fops;
+static struct miscdevice ps2emu_misc;
 
 struct ps2emu_device {
 	spinlock_t devlock;
@@ -55,21 +48,27 @@ struct ps2emu_device {
 	wait_queue_head_t waitq;
 };
 
-static const struct file_operations ps2emu_fops = {
-	.owner   = THIS_MODULE,
-	.open    = ps2emu_char_open,
-	.release = ps2emu_char_release,
-	.read    = ps2emu_char_read,
-	.write   = ps2emu_char_write,
-	.poll    = ps2emu_char_poll,
-	.llseek  = no_llseek,
-};
+static int ps2emu_device_write(struct serio *id, unsigned char val)
+{
+	struct ps2emu_device *ps2emu = id->port_data;
+	__u8 newhead;
+	unsigned long flags;
 
-static struct miscdevice ps2emu_misc = {
-	.fops  = &ps2emu_fops,
-	.minor = PS2EMU_MINOR,
-	.name  = PS2EMU_NAME,
-};
+	spin_lock_irqsave(&ps2emu->devlock, flags);
+
+	newhead = ps2emu->head + 1;
+	if (newhead < PS2EMU_BUFSIZE) {
+		ps2emu->buf[ps2emu->head] = val;
+		ps2emu->head = newhead;
+
+		wake_up_interruptible(&ps2emu->waitq);
+	} else
+		printk(KERN_WARNING "ps2emu: Output buffer is full\n");
+
+	spin_unlock_irqrestore(&ps2emu->devlock, flags);
+
+	return 0;
+}
 
 static int ps2emu_char_open(struct inode *inode, struct file *file)
 {
@@ -91,28 +90,6 @@ static int ps2emu_char_open(struct inode *inode, struct file *file)
 	serio_register_port(&ps2emu->serio);
 
 	nonseekable_open(inode, file);
-
-	return 0;
-}
-
-static int ps2emu_device_write(struct serio *id, unsigned char val)
-{
-	struct ps2emu_device *ps2emu = id->port_data;
-	__u8 newhead;
-	unsigned long flags;
-
-	spin_lock_irqsave(&ps2emu->devlock, flags);
-
-	newhead = ps2emu->head + 1;
-	if (newhead < PS2EMU_BUFSIZE) {
-		ps2emu->buf[ps2emu->head] = val;
-		ps2emu->head = newhead;
-
-		wake_up_interruptible(&ps2emu->waitq);
-	} else
-		printk(KERN_WARNING "ps2emu: Output buffer is full\n");
-
-	spin_unlock_irqrestore(&ps2emu->devlock, flags);
 
 	return 0;
 }
@@ -215,6 +192,22 @@ static void __exit ps2emu_exit(void)
 {
 	misc_deregister(&ps2emu_misc);
 }
+
+static const struct file_operations ps2emu_fops = {
+	.owner   = THIS_MODULE,
+	.open    = ps2emu_char_open,
+	.release = ps2emu_char_release,
+	.read    = ps2emu_char_read,
+	.write   = ps2emu_char_write,
+	.poll    = ps2emu_char_poll,
+	.llseek  = no_llseek,
+};
+
+static struct miscdevice ps2emu_misc = {
+	.fops  = &ps2emu_fops,
+	.minor = PS2EMU_MINOR,
+	.name  = PS2EMU_NAME,
+};
 
 module_init(ps2emu_init);
 module_exit(ps2emu_exit);
