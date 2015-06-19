@@ -44,7 +44,7 @@ static unsigned int ps2emu_char_poll(struct file *file, poll_table *wait);
 static int ps2emu_device_write(struct serio *id, unsigned char val);
 
 struct ps2emu_device {
-	struct mutex devlock;
+	spinlock_t devlock;
 
 	struct serio serio;
 
@@ -79,7 +79,7 @@ static int ps2emu_char_open(struct inode *inode, struct file *file)
 	if (!ps2emu)
 		return -ENOMEM;
 
-	mutex_init(&ps2emu->devlock);
+	spin_lock_init(&ps2emu->devlock);
 	init_waitqueue_head(&ps2emu->waitq);
 
 	ps2emu->serio.id.type = SERIO_8042;
@@ -99,8 +99,9 @@ static int ps2emu_device_write(struct serio *id, unsigned char val)
 {
 	struct ps2emu_device *ps2emu = id->port_data;
 	__u8 newhead;
+	unsigned long flags;
 
-	mutex_lock(&ps2emu->devlock);
+	spin_lock_irqsave(&ps2emu->devlock, flags);
 
 	newhead = ps2emu->head + 1;
 	if (newhead < PS2EMU_BUFSIZE) {
@@ -111,7 +112,7 @@ static int ps2emu_device_write(struct serio *id, unsigned char val)
 	} else
 		printk(KERN_WARNING "ps2emu: Output buffer is full\n");
 
-	mutex_unlock(&ps2emu->devlock);
+	spin_unlock_irqrestore(&ps2emu->devlock, flags);
 
 	return 0;
 }
@@ -132,6 +133,7 @@ static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
 	struct ps2emu_device *ps2emu = file->private_data;
 	int ret;
 	size_t len;
+	unsigned long flags;
 
 	if (file->f_flags & O_NONBLOCK && ps2emu->head == ps2emu->tail)
 		return -EAGAIN;
@@ -143,9 +145,7 @@ static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
 			return ret;
 	}
 
-	ret = mutex_lock_interruptible(&ps2emu->devlock);
-	if (ret)
-		return ret;
+	spin_lock_irqsave(&ps2emu->devlock, flags);
 
 	len = min((size_t)ps2emu->head - ps2emu->tail, count);
 	if (copy_to_user(buffer, &ps2emu->buf[ps2emu->tail], len))
@@ -157,7 +157,7 @@ static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
 		ps2emu->tail = 0;
 	}
 
-	mutex_unlock(&ps2emu->devlock);
+	spin_unlock_irqrestore(&ps2emu->devlock, flags);
 
 	return len;
 }
@@ -169,6 +169,7 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 	unsigned char *interrupt_data;
 	ssize_t ret;
 	int i;
+	unsigned long flags;
 
 	interrupt_data = kmalloc_array(sizeof(unsigned char), count,
 				       GFP_KERNEL);
@@ -180,14 +181,12 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 		goto out;
 	}
 
-	ret = mutex_lock_interruptible(&ps2emu->devlock);
-	if (ret)
-		goto out;
+	spin_lock_irqsave(&ps2emu->devlock, flags);
 
 	for (i = 0; i < count; i++)
 		serio_interrupt(&ps2emu->serio, interrupt_data[i], 0);
 
-	mutex_unlock(&ps2emu->devlock);
+	spin_unlock_irqrestore(&ps2emu->devlock, flags);
 	ret = count;
 
  out:
