@@ -40,3 +40,6 @@ Makefile
 # Shared objects (inc. Windows DLLs)
 *.so
 *.so.*
+
+# Kernel mod files
+*.mod.c
