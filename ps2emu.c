@@ -26,7 +26,7 @@
 #include <linux/poll.h>
 
 #define PS2EMU_NAME "ps2emu"
-#define PS2EMU_MINOR 240
+#define PS2EMU_MINOR MISC_DYNAMIC_MINOR
 #define PS2EMU_BUFSIZE 32
 
 MODULE_AUTHOR("Lyude <thatslyude@gmail.com>");
