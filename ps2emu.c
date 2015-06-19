@@ -30,7 +30,7 @@
 #define PS2EMU_BUFSIZE 32
 
 MODULE_AUTHOR("Lyude <thatslyude@gmail.com>");
-MODULE_DESCRIPTION("ps2emu test");
+MODULE_DESCRIPTION("ps2emu");
 MODULE_LICENSE("GPL");
 
 static const struct file_operations ps2emu_fops;
