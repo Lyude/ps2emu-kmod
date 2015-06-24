@@ -143,20 +143,16 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 				 size_t count, loff_t *ppos)
 {
 	struct ps2emu_device *ps2emu = file->private_data;
-	unsigned char *interrupt_data;
+	unsigned char interrupt_data[PS2EMU_BUFSIZE];
 	ssize_t ret;
 	int i;
 	unsigned long flags;
 
-	interrupt_data = kmalloc_array(sizeof(unsigned char), count,
-				       GFP_KERNEL);
-	if (!interrupt_data)
-		return -ENOMEM;
+	if (count > PS2EMU_BUFSIZE)
+		return -EMSGSIZE;
 
-	if (copy_from_user(interrupt_data, buffer, count)) {
-		ret = -EFAULT;
-		goto out;
-	}
+	if (copy_from_user(interrupt_data, buffer, count))
+		return -EFAULT;
 
 	spin_lock_irqsave(&ps2emu->devlock, flags);
 
@@ -166,8 +162,6 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 	spin_unlock_irqrestore(&ps2emu->devlock, flags);
 	ret = count;
 
- out:
-	kfree(interrupt_data);
 	return ret;
 }
 
