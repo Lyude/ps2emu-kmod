@@ -48,6 +48,9 @@ struct ps2emu_device {
 	wait_queue_head_t waitq;
 };
 
+#define ps2emu_warn(format, args...) \
+	printk(KERN_WARNING "ps2emu: " format, ##args)
+
 static int ps2emu_device_write(struct serio *id, unsigned char val)
 {
 	struct ps2emu_device *ps2emu = id->port_data;
@@ -63,7 +66,7 @@ static int ps2emu_device_write(struct serio *id, unsigned char val)
 
 		wake_up_interruptible(&ps2emu->waitq);
 	} else
-		printk(KERN_WARNING "ps2emu: Output buffer is full\n");
+		ps2emu_warn("Output buffer is full\n");
 
 	spin_unlock_irqrestore(&ps2emu->devlock, flags);
 
