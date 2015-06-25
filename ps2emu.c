@@ -25,6 +25,8 @@
 #include <linux/sched.h>
 #include <linux/poll.h>
 
+#include "ps2emu.h"
+
 #define PS2EMU_NAME "ps2emu"
 #define PS2EMU_MINOR MISC_DYNAMIC_MINOR
 #define PS2EMU_BUFSIZE 32
@@ -40,6 +42,8 @@ struct ps2emu_device {
 	spinlock_t devlock;
 
 	struct serio serio;
+
+	bool running;
 
 	__u8 head;
 	__u8 tail;
@@ -84,13 +88,10 @@ static int ps2emu_char_open(struct inode *inode, struct file *file)
 	spin_lock_init(&ps2emu->devlock);
 	init_waitqueue_head(&ps2emu->waitq);
 
-	ps2emu->serio.id.type = SERIO_8042;
 	ps2emu->serio.write = ps2emu_device_write;
 	ps2emu->serio.port_data = ps2emu;
 
 	file->private_data = ps2emu;
-
-	serio_register_port(&ps2emu->serio);
 
 	nonseekable_open(inode, file);
 
@@ -101,8 +102,10 @@ static int ps2emu_char_release(struct inode *inode, struct file *file)
 {
 	struct ps2emu_device *ps2emu = file->private_data;
 
-	serio_close(&ps2emu->serio);
-	serio_unregister_port(&ps2emu->serio);
+	if (ps2emu->running) {
+		serio_close(&ps2emu->serio);
+		serio_unregister_port(&ps2emu->serio);
+	}
 
 	return 0;
 }
@@ -146,26 +149,75 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 				 size_t count, loff_t *ppos)
 {
 	struct ps2emu_device *ps2emu = file->private_data;
-	unsigned char interrupt_data[PS2EMU_BUFSIZE];
-	ssize_t ret;
-	int i;
+	struct ps2emu_cmd cmd;
 	unsigned long flags;
 
-	if (count > PS2EMU_BUFSIZE)
-		return -EMSGSIZE;
+	if (count != sizeof(cmd))
+		return -EINVAL;
 
-	if (copy_from_user(interrupt_data, buffer, count))
+	if (copy_from_user(&cmd, buffer, count))
 		return -EFAULT;
 
-	spin_lock_irqsave(&ps2emu->devlock, flags);
+	switch (cmd.type) {
+	case PS2EMU_CMD_BEGIN:
+		if (!ps2emu->serio.id.type) {
+			ps2emu_warn("No port type given on /dev/ps2emu\n");
 
-	for (i = 0; i < count; i++)
-		serio_interrupt(&ps2emu->serio, interrupt_data[i], 0);
+			return -EINVAL;
+		}
+		if (ps2emu->running) {
+			ps2emu_warn("Begin command sent, but we're already "
+				    "running\n");
 
-	spin_unlock_irqrestore(&ps2emu->devlock, flags);
-	ret = count;
+			return -EINVAL;
+		}
 
-	return ret;
+		ps2emu->running = true;
+		serio_register_port(&ps2emu->serio);
+		break;
+
+	case PS2EMU_CMD_SET_PORT_TYPE:
+		if (ps2emu->running) {
+			ps2emu_warn("Can't change port type on an already "
+				    "running ps2emu instance\n");
+
+			return -EINVAL;
+		}
+
+		switch (cmd.data) {
+		case SERIO_8042:
+		case SERIO_8042_XL:
+		case SERIO_PS_PSTHRU:
+			ps2emu->serio.id.type = cmd.data;
+			break;
+
+		default:
+			ps2emu_warn("Invalid port type 0x%hhx\n", cmd.data);
+
+			return -EINVAL;
+		}
+
+		break;
+
+	case PS2EMU_CMD_SEND_INTERRUPT:
+		if (!ps2emu->running) {
+			ps2emu_warn("The device must be started before sending "
+				    "interrupts\n");
+
+			return -EINVAL;
+		}
+
+		spin_lock_irqsave(&ps2emu->devlock, flags);
+		serio_interrupt(&ps2emu->serio, cmd.data, 0);
+		spin_unlock_irqrestore(&ps2emu->devlock, flags);
+
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return count;
 }
 
 static unsigned int ps2emu_char_poll(struct file *file, poll_table *wait)
