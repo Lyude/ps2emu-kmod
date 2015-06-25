@@ -39,7 +39,7 @@ static const struct file_operations ps2emu_fops;
 static struct miscdevice ps2emu_misc;
 
 struct ps2emu_device {
-	spinlock_t devlock;
+	struct mutex devlock;
 
 	struct serio serio;
 
@@ -59,9 +59,8 @@ static int ps2emu_device_write(struct serio *id, unsigned char val)
 {
 	struct ps2emu_device *ps2emu = id->port_data;
 	__u8 newhead;
-	unsigned long flags;
 
-	spin_lock_irqsave(&ps2emu->devlock, flags);
+	mutex_lock(&ps2emu->devlock);
 
 	newhead = ps2emu->head + 1;
 	if (newhead < PS2EMU_BUFSIZE) {
@@ -72,7 +71,7 @@ static int ps2emu_device_write(struct serio *id, unsigned char val)
 	} else
 		ps2emu_warn("Output buffer is full\n");
 
-	spin_unlock_irqrestore(&ps2emu->devlock, flags);
+	mutex_unlock(&ps2emu->devlock);
 
 	return 0;
 }
@@ -85,7 +84,7 @@ static int ps2emu_char_open(struct inode *inode, struct file *file)
 	if (!ps2emu)
 		return -ENOMEM;
 
-	spin_lock_init(&ps2emu->devlock);
+	mutex_init(&ps2emu->devlock);
 	init_waitqueue_head(&ps2emu->waitq);
 
 	ps2emu->serio.write = ps2emu_device_write;
@@ -116,7 +115,6 @@ static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
 	struct ps2emu_device *ps2emu = file->private_data;
 	int ret;
 	size_t len;
-	unsigned long flags;
 
 	if (file->f_flags & O_NONBLOCK && ps2emu->head == ps2emu->tail)
 		return -EAGAIN;
@@ -128,7 +126,7 @@ static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
 			return ret;
 	}
 
-	spin_lock_irqsave(&ps2emu->devlock, flags);
+	mutex_lock(&ps2emu->devlock);
 
 	len = min((size_t)ps2emu->head - ps2emu->tail, count);
 	if (copy_to_user(buffer, &ps2emu->buf[ps2emu->tail], len))
@@ -140,7 +138,7 @@ static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
 		ps2emu->tail = 0;
 	}
 
-	spin_unlock_irqrestore(&ps2emu->devlock, flags);
+	mutex_unlock(&ps2emu->devlock);
 
 	return len;
 }
@@ -150,7 +148,6 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 {
 	struct ps2emu_device *ps2emu = file->private_data;
 	struct ps2emu_cmd cmd;
-	unsigned long flags;
 
 	if (count != sizeof(cmd))
 		return -EINVAL;
@@ -207,9 +204,9 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 			return -EINVAL;
 		}
 
-		spin_lock_irqsave(&ps2emu->devlock, flags);
+		mutex_lock(&ps2emu->devlock);
 		serio_interrupt(&ps2emu->serio, cmd.data, 0);
-		spin_unlock_irqrestore(&ps2emu->devlock, flags);
+		mutex_unlock(&ps2emu->devlock);
 
 		break;
 
