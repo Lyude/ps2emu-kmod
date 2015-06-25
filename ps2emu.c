@@ -116,9 +116,10 @@ static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
 	int ret;
 	size_t len;
 
-	if (file->f_flags & O_NONBLOCK && ps2emu->head == ps2emu->tail)
-		return -EAGAIN;
-	else {
+	if (file->f_flags & O_NONBLOCK) {
+		if (ps2emu->head == ps2emu->tail)
+			return -EAGAIN;
+	} else {
 		ret = wait_event_interruptible(ps2emu->waitq,
 					       ps2emu->head != ps2emu->tail);
 
