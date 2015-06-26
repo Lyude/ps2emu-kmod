@@ -13,6 +13,7 @@
  * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
  * details.
  */
+#include <linux/circ_buf.h>
 #include <linux/mutex.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -29,7 +30,7 @@
 
 #define PS2EMU_NAME "ps2emu"
 #define PS2EMU_MINOR MISC_DYNAMIC_MINOR
-#define PS2EMU_BUFSIZE 32
+#define PS2EMU_BUFSIZE 16
 
 MODULE_AUTHOR("Lyude <thatslyude@gmail.com>");
 MODULE_DESCRIPTION("ps2emu");
@@ -39,8 +40,6 @@ static const struct file_operations ps2emu_fops;
 static struct miscdevice ps2emu_misc;
 
 struct ps2emu_device {
-	struct mutex devlock;
-
 	struct serio serio;
 
 	bool running;
@@ -60,18 +59,19 @@ static int ps2emu_device_write(struct serio *id, unsigned char val)
 	struct ps2emu_device *ps2emu = id->port_data;
 	__u8 newhead;
 
-	mutex_lock(&ps2emu->devlock);
+	ps2emu->buf[ps2emu->head] = val;
 
 	newhead = ps2emu->head + 1;
-	if (newhead < PS2EMU_BUFSIZE) {
-		ps2emu->buf[ps2emu->head] = val;
+
+	if (unlikely(newhead == ps2emu->tail))
+		ps2emu_warn("Buffer overflowed, ps2emu client isn't keeping up");
+
+	if (newhead < PS2EMU_BUFSIZE)
 		ps2emu->head = newhead;
+	else
+		ps2emu->head = 0;
 
-		wake_up_interruptible(&ps2emu->waitq);
-	} else
-		ps2emu_warn("Output buffer is full\n");
-
-	mutex_unlock(&ps2emu->devlock);
+	wake_up_interruptible(&ps2emu->waitq);
 
 	return 0;
 }
@@ -84,7 +84,6 @@ static int ps2emu_char_open(struct inode *inode, struct file *file)
 	if (!ps2emu)
 		return -ENOMEM;
 
-	mutex_init(&ps2emu->devlock);
 	init_waitqueue_head(&ps2emu->waitq);
 
 	ps2emu->serio.write = ps2emu_device_write;
@@ -114,34 +113,34 @@ static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
 {
 	struct ps2emu_device *ps2emu = file->private_data;
 	int ret;
-	size_t len;
+	size_t nonwrap_len, copylen;
+	u8 head; /* So we only access ps2emu->head once */
 
 	if (file->f_flags & O_NONBLOCK) {
-		if (ps2emu->head == ps2emu->tail)
+		head = ps2emu->head;
+
+		if (head == ps2emu->tail)
 			return -EAGAIN;
 	} else {
-		ret = wait_event_interruptible(ps2emu->waitq,
-					       ps2emu->head != ps2emu->tail);
+		ret = wait_event_interruptible(
+		       ps2emu->waitq, (head = ps2emu->head) != ps2emu->tail);
 
 		if (ret)
 			return ret;
 	}
 
-	mutex_lock(&ps2emu->devlock);
+	nonwrap_len = CIRC_CNT_TO_END(head, ps2emu->tail,
+				      PS2EMU_BUFSIZE);
+	copylen = min(nonwrap_len, count);
 
-	len = min((size_t)ps2emu->head - ps2emu->tail, count);
-	if (copy_to_user(buffer, &ps2emu->buf[ps2emu->tail], len))
-		return -EFAULT;
+	if (copy_to_user(buffer, &ps2emu->buf[ps2emu->tail], copylen))
+		ret = -EFAULT;
 
-	ps2emu->tail += len;
-	if (ps2emu->head == ps2emu->tail) {
-		ps2emu->head = 0;
+	ps2emu->tail += copylen;
+	if (ps2emu->tail == PS2EMU_BUFSIZE)
 		ps2emu->tail = 0;
-	}
 
-	mutex_unlock(&ps2emu->devlock);
-
-	return len;
+	return copylen;
 }
 
 static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
@@ -205,9 +204,7 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 			return -EINVAL;
 		}
 
-		mutex_lock(&ps2emu->devlock);
 		serio_interrupt(&ps2emu->serio, cmd.data, 0);
-		mutex_unlock(&ps2emu->devlock);
 
 		break;
 
