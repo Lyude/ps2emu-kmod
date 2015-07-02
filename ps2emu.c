@@ -129,8 +129,7 @@ static ssize_t ps2emu_char_read(struct file *file, char __user *buffer,
 			return ret;
 	}
 
-	nonwrap_len = CIRC_CNT_TO_END(head, ps2emu->tail,
-				      PS2EMU_BUFSIZE);
+	nonwrap_len = CIRC_CNT_TO_END(head, ps2emu->tail, PS2EMU_BUFSIZE);
 	copylen = min(nonwrap_len, count);
 
 	if (copy_to_user(buffer, &ps2emu->buf[ps2emu->tail], copylen))
