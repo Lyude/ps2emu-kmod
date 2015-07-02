@@ -32,7 +32,7 @@
 #define PS2EMU_MINOR MISC_DYNAMIC_MINOR
 #define PS2EMU_BUFSIZE 16
 
-MODULE_AUTHOR("Lyude <thatslyude@gmail.com>");
+MODULE_AUTHOR("Stephen Chandler Paul <thatslyude@gmail.com>");
 MODULE_DESCRIPTION("ps2emu");
 MODULE_LICENSE("GPL");
 
