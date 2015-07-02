@@ -44,8 +44,8 @@ struct ps2emu_device {
 
 	bool running;
 
-	__u8 head;
-	__u8 tail;
+	u8 head;
+	u8 tail;
 	unsigned char buf[PS2EMU_BUFSIZE];
 
 	wait_queue_head_t waitq;
