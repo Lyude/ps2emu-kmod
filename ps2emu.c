@@ -163,8 +163,7 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 			return -EINVAL;
 		}
 		if (ps2emu->running) {
-			ps2emu_warn("Begin command sent, but we're already "
-				    "running\n");
+			ps2emu_warn("Begin command sent, but we're already running\n");
 
 			return -EINVAL;
 		}
@@ -175,8 +174,7 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 
 	case PS2EMU_CMD_SET_PORT_TYPE:
 		if (ps2emu->running) {
-			ps2emu_warn("Can't change port type on an already "
-				    "running ps2emu instance\n");
+			ps2emu_warn("Can't change port type on an already running ps2emu instance\n");
 
 			return -EINVAL;
 		}
@@ -198,8 +196,7 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 
 	case PS2EMU_CMD_SEND_INTERRUPT:
 		if (!ps2emu->running) {
-			ps2emu_warn("The device must be started before sending "
-				    "interrupts\n");
+			ps2emu_warn("The device must be started before sending interrupts\n");
 
 			return -EINVAL;
 		}
