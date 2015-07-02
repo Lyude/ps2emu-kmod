@@ -234,19 +234,19 @@ static void __exit ps2emu_exit(void)
 }
 
 static const struct file_operations ps2emu_fops = {
-	.owner   = THIS_MODULE,
-	.open    = ps2emu_char_open,
-	.release = ps2emu_char_release,
-	.read    = ps2emu_char_read,
-	.write   = ps2emu_char_write,
-	.poll    = ps2emu_char_poll,
-	.llseek  = no_llseek,
+	.owner		= THIS_MODULE,
+	.open		= ps2emu_char_open,
+	.release	= ps2emu_char_release,
+	.read		= ps2emu_char_read,
+	.write		= ps2emu_char_write,
+	.poll		= ps2emu_char_poll,
+	.llseek		= no_llseek,
 };
 
 static struct miscdevice ps2emu_misc = {
-	.fops  = &ps2emu_fops,
-	.minor = PS2EMU_MINOR,
-	.name  = PS2EMU_NAME,
+	.fops	= &ps2emu_fops,
+	.minor	= PS2EMU_MINOR,
+	.name	= PS2EMU_NAME,
 };
 
 module_init(ps2emu_init);
