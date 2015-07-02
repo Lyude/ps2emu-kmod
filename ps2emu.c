@@ -102,6 +102,8 @@ static int ps2emu_char_release(struct inode *inode, struct file *file)
 
 	if (ps2emu->running)
 		serio_unregister_port(&ps2emu->serio);
+	else
+		kfree(ps2emu);
 
 	return 0;
 }
