@@ -100,10 +100,8 @@ static int ps2emu_char_release(struct inode *inode, struct file *file)
 {
 	struct ps2emu_device *ps2emu = file->private_data;
 
-	if (ps2emu->running) {
-		serio_close(&ps2emu->serio);
+	if (ps2emu->running)
 		serio_unregister_port(&ps2emu->serio);
-	}
 
 	return 0;
 }
