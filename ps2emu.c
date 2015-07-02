@@ -148,10 +148,10 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 	struct ps2emu_device *ps2emu = file->private_data;
 	struct ps2emu_cmd cmd;
 
-	if (count != sizeof(cmd))
+	if (count < sizeof(cmd))
 		return -EINVAL;
 
-	if (copy_from_user(&cmd, buffer, count))
+	if (copy_from_user(&cmd, buffer, sizeof(cmd)))
 		return -EFAULT;
 
 	switch (cmd.type) {
@@ -208,7 +208,7 @@ static ssize_t ps2emu_char_write(struct file *file, const char __user *buffer,
 		return -EINVAL;
 	}
 
-	return count;
+	return sizeof(cmd);
 }
 
 static unsigned int ps2emu_char_poll(struct file *file, poll_table *wait)
