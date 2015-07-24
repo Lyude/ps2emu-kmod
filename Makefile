@@ -1,5 +1,5 @@
-obj-m    += ps2emu.o
-header-y += ps2emu.h
+obj-m    += userio.o
+header-y += userio.h
 
 KDIR  := /lib/modules/$(shell uname -r)/build
 PWD   := $(shell pwd)
